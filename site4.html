@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Arquivos CSV</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .header {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            background-color: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        button {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            min-width: 120px;
+            white-space: nowrap;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .table-container {
+            flex: 2;
+            overflow: auto;
+            background-color: white;
+            transition: flex 0.3s ease;
+        }
+        
+        .table-container.maximized {
+            flex: 1 0 100%;
+        }
+        
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 300px;
+            min-height: 0;
+            border-left: 1px solid #dee2e6;
+            transition: flex 0.3s ease;
+        }
+        
+        .right-panel.minimized {
+            flex: 0 0 40px;
+            min-width: 40px;
+            overflow: hidden;
+        }
+        
+        .panel-section {
+            flex: 1;
+            padding: 8px;
+            overflow: auto;
+            min-height: 0;
+            border-bottom: 1px solid #dee2e6;
+            position: relative;
+            transition: flex 0.3s ease;
+        }
+        
+        .panel-section.minimized {
+            flex: 0 0 40px;
+            overflow: hidden;
+        }
+        
+        .panel-section:last-child {
+            border-bottom: none;
+        }
+        
+        .abstract {
+            background-color: lightyellow;
+        }
+        
+        .notes {
+            background-color: lightgray;
+        }
+        
+        .citation {
+            background-color: lightblue;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        
+        tr.selected {
+            background-color: #d4edda;
+        }
+        
+        .doi-link {
+            color: blue;
+            text-decoration: underline;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        
+        .favorite {
+            background-color: lightgray !important;
+        }
+        
+        textarea {
+            width: 100%;
+            height: calc(100% - 25px);
+            border: none;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            background-color: transparent;
+        }
+        
+        .status {
+            padding: 8px;
+            margin-left: auto;
+            border-radius: 4px;
+            flex-grow: 1;
+            max-width: calc(100% - 250px);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            background-color: #e9ecef;
+        }
+        
+        .citation-type {
+            margin-top: 8px;
+            padding: 8px;
+            background-color: rgba(255,255,255,0.7);
+            border-radius: 4px;
+            overflow: auto;
+        }
+        
+        .citation-type h4 {
+            margin-top: 0;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+            position: sticky;
+            top: 0;
+            background-color: rgba(255,255,255,0.9);
+        }
+        
+        .copy-btn {
+            background-color: #6c757d;
+            margin-left: 8px;
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+        
+        .copy-btn:hover {
+            background-color: #5a6268;
+        }
+        
+        .panel-controls {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: flex;
+            gap: 5px;
+            z-index: 10;
+        }
+        
+        .control-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 3px;
+            background-color: rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            border: none;
+            color: #333;
+        }
+        
+        .control-btn:hover {
+            background-color: rgba(0,0,0,0.2);
+        }
+        
+        .section-title {
+            cursor: pointer;
+            padding-right: 30px;
+        }
+        
+        .notes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .notes-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .clear-btn {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .clear-btn:hover {
+            background-color: #ff5252;
+        }
+        
+        .last-edited {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+            display: none;
+        }
+        
+        /* Responsividade para telas pequenas */
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .table-container, .right-panel {
+                min-width: 100%;
+            }
+            
+            .header {
+                flex-direction: column;
+            }
+            
+            .status {
+                max-width: 100%;
+                margin-left: 0;
+                margin-top: 5px;
+            }
+            
+            .right-panel.minimized {
+                flex: 0 0 0;
+                min-width: 100%;
+                border-left: none;
+                border-top: 1px solid #dee2e6;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button id="loadButton">Carregar Arquivo CSV</button>
+            <button id="citationButton" disabled>Gerar Citações ABNT</button>
+            <div id="statusMessage" class="status">Selecione um arquivo CSV para começar</div>
+        </div>
+        
+        <div class="main-content">
+            <div class="table-container" id="tableContainer">
+                <table id="csvTable">
+                    <thead>
+                        <tr id="tableHeader"></tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            
+            <div class="right-panel" id="rightPanel">
+                <div class="panel-section abstract" id="abstractSection">
+                    <div class="panel-controls">
+                        <button class="control-btn minimize-btn" onclick="toggleSection('abstractSection')">-</button>
+                        <button class="control-btn maximize-btn" onclick="toggleMaximize('abstractSection')">□</button>
+                    </div>
+                    <h3 class="section-title" onclick="toggleSection('abstractSection')">Resumo</h3>
+                    <div id="abstractText">Clique em uma linha para ver o resumo...</div>
+                </div>
+                <div class="panel-section notes" id="notesSection">
+                    <div class="panel-controls">
+                        <button class="control-btn minimize-btn" onclick="toggleSection('notesSection')">-</button>
+                        <button class="control-btn maximize-btn" onclick="toggleMaximize('notesSection')">□</button>
+                    </div>
+                    <div class="notes-header">
+                        <h3 class="section-title" onclick="toggleSection('notesSection')">Anotações</h3>
+                        <div class="notes-controls">
+                            <button class="control-btn clear-btn" onclick="clearNotes()" title="Limpar anotações">×</button>
+                        </div>
+                    </div>
+                    <div id="last-edited-indicator" class="last-edited"></div>
+                    <textarea id="notesText" placeholder="Digite suas anotações aqui..."></textarea>
+                </div>
+                <div class="panel-section citation" id="citationSection">
+                    <div class="panel-controls">
+                        <button class="control-btn minimize-btn" onclick="toggleSection('citationSection')">-</button>
+                        <button class="control-btn maximize-btn" onclick="toggleMaximize('citationSection')">□</button>
+                    </div>
+                    <h3 class="section-title" onclick="toggleSection('citationSection')">Citações ABNT</h3>
+                    <div id="citationContainer">
+                        <div class="citation-type">
+                            <h4>Referência Bibliográfica</h4>
+                            <div id="referenceText">A referência aparecerá aqui...</div>
+                            <button class="copy-btn" onclick="copyToClipboard('referenceText')">Copiar</button>
+                        </div>
+                        <div class="citation-type">
+                            <h4>Citação Direta</h4>
+                            <div id="directCitationText">A citação direta aparecerá aqui...</div>
+                            <button class="copy-btn" onclick="copyToClipboard('directCitationText')">Copiar</button>
+                        </div>
+                        <div class="citation-type">
+                            <h4>Citação Indireta</h4>
+                            <div id="indirectCitationText">A citação indireta aparecerá aqui...</div>
+                            <button class="copy-btn" onclick="copyToClipboard('indirectCitationText')">Copiar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variáveis globais
+        let csvData = [];
+        let currentSelectedRow = null;
+        let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+        let notesData = JSON.parse(localStorage.getItem('articleNotes')) || {};
+        let sectionStates = JSON.parse(localStorage.getItem('sectionStates')) || {
+            abstractSection: 'normal',
+            notesSection: 'normal',
+            citationSection: 'normal',
+            rightPanel: 'normal',
+            tableContainer: 'normal'
+        };
+        
+        // Elementos DOM
+        const loadButton = document.getElementById('loadButton');
+        const citationButton = document.getElementById('citationButton');
+        const tableHeader = document.getElementById('tableHeader');
+        const tableBody = document.getElementById('tableBody');
+        const abstractText = document.getElementById('abstractText');
+        const notesText = document.getElementById('notesText');
+        const referenceText = document.getElementById('referenceText');
+        const directCitationText = document.getElementById('directCitationText');
+        const indirectCitationText = document.getElementById('indirectCitationText');
+        const statusMessage = document.getElementById('statusMessage');
+        const rightPanel = document.getElementById('rightPanel');
+        const tableContainer = document.getElementById('tableContainer');
+        
+        // Inicializar estados das seções
+        function initializeSectionStates() {
+            Object.keys(sectionStates).forEach(sectionId => {
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    if (sectionStates[sectionId] === 'minimized') {
+                        section.classList.add('minimized');
+                    } else if (sectionStates[sectionId] === 'maximized') {
+                        section.classList.add('maximized');
+                    }
+                }
+            });
+        }
+        
+        // Event Listeners
+        loadButton.addEventListener('click', loadCSV);
+        citationButton.addEventListener('click', generateAllCitations);
+        notesText.addEventListener('input', saveNotes);
+        
+        // Ajustar layout quando a janela for redimensionada
+        window.addEventListener('resize', adjustLayout);
+        
+        function adjustLayout() {
+            if (tableHeader.children.length > 0) {
+                resizeTableColumns();
+            }
+        }
+        
+        // Função para alternar entre minimizar/restaurar seção
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section.classList.contains('minimized')) {
+                section.classList.remove('minimized');
+                sectionStates[sectionId] = 'normal';
+            } else {
+                // Minimizar todas as outras seções no mesmo painel
+                const parent = section.parentElement;
+                if (parent.classList.contains('right-panel')) {
+                    parent.querySelectorAll('.panel-section').forEach(s => {
+                        if (s.id !== sectionId && !s.classList.contains('minimized')) {
+                            s.classList.add('minimized');
+                            sectionStates[s.id] = 'minimized';
+                        }
+                    });
+                }
+                
+                section.classList.add('minimized');
+                sectionStates[sectionId] = 'minimized';
+            }
+            
+            // Salvar estado
+            localStorage.setItem('sectionStates', JSON.stringify(sectionStates));
+            adjustLayout();
+        }
+        
+        // Função para maximizar/restaurar seção
+        function toggleMaximize(sectionId) {
+            const section = document.getElementById(sectionId);
+            const parent = section.parentElement;
+            
+            if (section.classList.contains('minimized')) {
+                section.classList.remove('minimized');
+            }
+            
+            if (parent.classList.contains('right-panel')) {
+                // Maximizar no painel direito
+                if (section.classList.contains('maximized')) {
+                    section.classList.remove('maximized');
+                    sectionStates[sectionId] = 'normal';
+                } else {
+                    parent.querySelectorAll('.panel-section').forEach(s => {
+                        s.classList.remove('maximized');
+                        sectionStates[s.id] = s.classList.contains('minimized') ? 'minimized' : 'normal';
+                    });
+                    section.classList.add('maximized');
+                    sectionStates[sectionId] = 'maximized';
+                }
+            } else {
+                // Maximizar o container principal
+                if (section.classList.contains('maximized')) {
+                    section.classList.remove('maximized');
+                    sectionStates[sectionId] = 'normal';
+                } else {
+                    section.classList.add('maximized');
+                    sectionStates[sectionId] = 'maximized';
+                }
+            }
+            
+            // Salvar estado
+            localStorage.setItem('sectionStates', JSON.stringify(sectionStates));
+            adjustLayout();
+        }
+        
+        // Função para copiar texto para área de transferência
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                updateStatus('Texto copiado para área de transferência!');
+            }).catch(err => {
+                updateStatus('Falha ao copiar texto');
+                console.error('Erro ao copiar:', err);
+            });
+        }
+        
+        // Função para atualizar mensagem de status
+        function updateStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusMessage.className = 'status';
+        }
+        
+        // Função para carregar CSV
+        function loadCSV() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) {
+                    updateStatus('Nenhum arquivo selecionado');
+                    return;
+                }
+                
+                updateStatus(`Processando arquivo: ${file.name}...`);
+                
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    try {
+                        parseCSV(event.target.result);
+                        updateStatus(`Arquivo ${file.name} carregado com sucesso!`);
+                        citationButton.disabled = false;
+                    } catch (error) {
+                        console.error('Erro ao processar CSV:', error);
+                        updateStatus(`Erro ao processar o arquivo: ${error.message}`);
+                    }
+                };
+                
+                reader.onerror = function() {
+                    updateStatus('Erro ao ler o arquivo');
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+        
+        // Função para parsear CSV
+        function parseCSV(text) {
+            // Limpar dados anteriores
+            csvData = [];
+            currentSelectedRow = null;
+            notesText.value = '';
+            document.getElementById('last-edited-indicator').style.display = 'none';
+            
+            // Normalizar quebras de linha e remover linhas vazias
+            const lines = text.replace(/\r\n/g, '\n').split('\n').filter(line => line.trim() !== '');
+            
+            if (lines.length < 2) {
+                throw new Error('O arquivo CSV deve ter pelo menos um cabeçalho e uma linha de dados');
+            }
+            
+            // Processar cabeçalhos
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            // Verificar colunas necessárias
+            const requiredColumns = ['DOI', 'PMID', 'arXiv ID', 'Title', 'Abstract', 'Authors', 'Journal', 'Year', 'relevance_score'];
+            const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+            
+            if (missingColumns.length > 0) {
+                throw new Error(`Arquivo CSV não contém todas as colunas necessárias. Faltando: ${missingColumns.join(', ')}`);
+            }
+            
+            // Processar linhas de dados
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                const row = {};
+                
+                for (let j = 0; j < headers.length; j++) {
+                    row[headers[j]] = values[j] ? values[j].trim() : '';
+                }
+                
+                csvData.push(row);
+            }
+            
+            renderTable(headers);
+        }
+        
+        // Função auxiliar para parsear linhas CSV corretamente (considerando vírgulas dentro de aspas)
+        function parseCSVLine(line) {
+            const result = [];
+            let inQuotes = false;
+            let currentField = '';
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(currentField);
+                    currentField = '';
+                } else {
+                    currentField += char;
+                }
+            }
+            
+            result.push(currentField);
+            return result;
+        }
+        
+        // Função para renderizar tabela
+        function renderTable(headers) {
+            // Limpar tabela
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+            
+            // Adicionar cabeçalhos
+            const favoriteHeader = document.createElement('th');
+            favoriteHeader.textContent = 'Favorito';
+            tableHeader.appendChild(favoriteHeader);
+            
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                tableHeader.appendChild(th);
+            });
+            
+            // Adicionar linhas
+            csvData.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                
+                // Adicionar classe favorite se for favorito
+                if (favorites.includes(rowIndex)) {
+                    tr.classList.add('favorite');
+                }
+                
+                // Adicionar checkbox de favorito
+                const favoriteTd = document.createElement('td');
+                const favoriteCheckbox = document.createElement('input');
+                favoriteCheckbox.type = 'checkbox';
+                favoriteCheckbox.checked = favorites.includes(rowIndex);
+                favoriteCheckbox.addEventListener('change', () => toggleFavorite(rowIndex));
+                favoriteTd.appendChild(favoriteCheckbox);
+                tr.appendChild(favoriteTd);
+                
+                // Adicionar células de dados
+                headers.forEach(header => {
+                    const td = document.createElement('td');
+                    
+                    if (header === 'DOI' && row[header]) {
+                        const doiLink = document.createElement('span');
+                        doiLink.className = 'doi-link';
+                        doiLink.textContent = row[header];
+                        doiLink.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            openDoiLink(row[header]);
+                        });
+                        td.appendChild(doiLink);
+                    } else if (header === 'Abstract') {
+                        td.textContent = row[header].substring(0, 100) + (row[header].length > 100 ? '...' : '');
+                        td.title = row[header];
+                    } else {
+                        td.textContent = row[header];
+                    }
+                    
+                    tr.appendChild(td);
+                });
+                
+                // Adicionar evento de clique para mostrar resumo e carregar anotações
+                tr.addEventListener('click', () => {
+                    // Remover seleção anterior
+                    if (currentSelectedRow !== null) {
+                        tableBody.children[currentSelectedRow].classList.remove('selected');
+                    }
+                    
+                    // Selecionar nova linha
+                    tr.classList.add('selected');
+                    currentSelectedRow = rowIndex;
+                    
+                    displayAbstract(rowIndex);
+                    loadNotes(rowIndex);
+                });
+                
+                tableBody.appendChild(tr);
+            });
+            
+            // Ajustar colunas após renderização
+            setTimeout(resizeTableColumns, 0);
+        }
+        
+        // Função para ajustar largura das colunas
+        function resizeTableColumns() {
+            const table = document.getElementById('csvTable');
+            const headerCells = tableHeader.querySelectorAll('th');
+            const bodyCells = tableBody.querySelectorAll('tr:first-child td');
+            
+            // Resetar larguras
+            headerCells.forEach(cell => {
+                cell.style.width = 'auto';
+            });
+            
+            // Calcular larguras necessárias
+            headerCells.forEach((headerCell, index) => {
+                if (bodyCells[index]) {
+                    const headerWidth = headerCell.scrollWidth;
+                    const bodyWidth = bodyCells[index].scrollWidth;
+                    const maxWidth = Math.max(headerWidth, bodyWidth);
+                    
+                    // Limitar largura mínima e máxima
+                    const finalWidth = Math.min(Math.max(maxWidth, 80), 300);
+                    headerCell.style.width = `${finalWidth}px`;
+                }
+            });
+        }
+        
+        // Função para mostrar resumo
+        function displayAbstract(rowIndex) {
+            abstractText.textContent = csvData[rowIndex]['Abstract'] || 'Nenhum resumo disponível';
+        }
+        
+        // Função para salvar anotações
+        function saveNotes() {
+            if (currentSelectedRow !== null) {
+                const articleId = getArticleId(currentSelectedRow);
+                notesData[articleId] = {
+                    content: notesText.value,
+                    lastUpdated: new Date().toISOString()
+                };
+                localStorage.setItem('articleNotes', JSON.stringify(notesData));
+                
+                // Atualizar indicador de última edição
+                updateLastEditedIndicator(notesData[articleId]);
+            }
+        }
+        
+        // Função para carregar anotações
+        function loadNotes(rowIndex) {
+            const articleId = getArticleId(rowIndex);
+            const note = notesData[articleId];
+            notesText.value = note ? note.content : '';
+            
+            // Atualizar indicador de última edição
+            updateLastEditedIndicator(note);
+        }
+        
+        // Função para obter ID único do artigo
+        function getArticleId(rowIndex) {
+            const row = csvData[rowIndex];
+            return row['DOI'] || row['PMID'] || row['Title'];
+        }
+        
+        // Função para atualizar indicador de última edição
+        function updateLastEditedIndicator(note) {
+            const indicator = document.getElementById('last-edited-indicator');
+            if (note && note.lastUpdated) {
+                const date = new Date(note.lastUpdated);
+                indicator.textContent = `Última edição: ${date.toLocaleString()}`;
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+        
+        // Função para limpar anotações
+        function clearNotes() {
+            if (currentSelectedRow !== null && confirm('Tem certeza que deseja limpar as anotações deste artigo?')) {
+                const articleId = getArticleId(currentSelectedRow);
+                delete notesData[articleId];
+                localStorage.setItem('articleNotes', JSON.stringify(notesData));
+                notesText.value = '';
+                document.getElementById('last-edited-indicator').style.display = 'none';
+                updateStatus('Anotações limpas com sucesso');
+            }
+        }
+        
+        // Função para gerar todas as citações
+        function generateAllCitations() {
+            if (currentSelectedRow === null) {
+                updateStatus('Selecione uma linha para gerar as citações');
+                return;
+            }
+            
+            const row = csvData[currentSelectedRow];
+            
+            // Gerar referência bibliográfica
+            generateReference(row);
+            
+            // Gerar citação direta
+            generateDirectCitation(row);
+            
+            // Gerar citação indireta
+            generateIndirectCitation(row);
+            
+            updateStatus('Citações ABNT geradas com sucesso');
+        }
+        
+        // Função para gerar referência bibliográfica (formato ABNT)
+        function generateReference(row) {
+            // Formatar autores (último sobrenome em maiúsculas)
+            const authors = formatAuthors(row['Authors']);
+            
+            // Montar referência
+            let reference = `${authors}. ${row['Title']}. `;
+            reference += `<strong>${row['Journal']}</strong>, `;
+            reference += `${row['Year']}.`;
+            
+            // Adicionar DOI se disponível
+            if (row['DOI']) {
+                reference += ` DOI: ${row['DOI']}`;
+            }
+            
+            referenceText.innerHTML = reference;
+        }
+        
+        // Função para formatar autores no padrão ABNT
+        function formatAuthors(authorsString) {
+            const authors = authorsString.split(',').map(a => a.trim());
+            
+            return authors.map((author, index) => {
+                const parts = author.split(' ');
+                const lastName = parts[parts.length - 1].toUpperCase();
+                const firstNames = parts.slice(0, -1).join(' ');
+                
+                // Último autor usa "e", outros usam vírgula
+                const separator = index === authors.length - 1 ? 
+                                (authors.length > 1 ? ' e ' : '') : 
+                                (index === authors.length - 2 ? ' ' : ', ');
+                
+                return `${lastName}, ${firstNames}${separator}`;
+            }).join('').replace(/, $/, ''); // Remove vírgula extra no final
+        }
+        
+        // Função para gerar citação direta
+        function generateDirectCitation(row) {
+            const authors = formatAuthorsForCitation(row['Authors']);
+            const year = row['Year'];
+            
+            const citation = `"Texto citado entre aspas" (${authors}, ${year}, p. XX).`;
+            directCitationText.textContent = citation;
+        }
+        
+        // Função para gerar citação indireta
+        function generateIndirectCitation(row) {
+            const authors = formatAuthorsForCitation(row['Authors']);
+            const year = row['Year'];
+            
+            const citation = `De acordo com ${authors} (${year}), o texto é parafraseado aqui sem aspas.`;
+            indirectCitationText.textContent = citation;
+        }
+        
+        // Função auxiliar para formatar autores em citações
+        function formatAuthorsForCitation(authorsString) {
+            const authors = authorsString.split(',').map(a => a.trim());
+            
+            if (authors.length > 3) {
+                return `${authors[0].split(' ').pop().toUpperCase()} et al.`;
+            }
+            
+            return authors.map(a => a.split(' ').pop().toUpperCase()).join(' e ');
+        }
+        
+        // Função para alternar favorito
+        function toggleFavorite(rowIndex) {
+            if (favorites.includes(rowIndex)) {
+                favorites = favorites.filter(i => i !== rowIndex);
+                tableBody.children[rowIndex].classList.remove('favorite');
+                updateStatus('Removido dos favoritos');
+            } else {
+                favorites.push(rowIndex);
+                tableBody.children[rowIndex].classList.add('favorite');
+                updateStatus('Adicionado aos favoritos');
+            }
+            
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+        }
+        
+        // Função para abrir link DOI
+        function openDoiLink(doi) {
+            if (doi && doi.startsWith('10.')) {
+                window.open(`https://doi.org/${doi}`, '_blank');
+            } else {
+                updateStatus('DOI inválido ou não disponível');
+            }
+        }
+        
+        // Inicializar layout
+        initializeSectionStates();
+        adjustLayout();
+    </script>
+</body>
+</html>
